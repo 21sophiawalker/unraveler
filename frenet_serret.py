@@ -51,6 +51,7 @@ def computeFrenetSerretFrames(points, tangents, closed=True, initialNormal=None)
         If true, the curve is assumed closed and each frame is rotated such that the frames 'match up'
     *initialNormal*:
         Normal vector for the initial frame.
+    Adapted from Github Damien xxx
     """
 
 
@@ -73,7 +74,7 @@ def computeFrenetSerretFrames(points, tangents, closed=True, initialNormal=None)
     atz = abs(tangent[2]) #absolute value of the z-component of the tangent vector
 
     if initialNormal is None:
-        if aty > atx and aty >= atz:
+        if aty > atx and aty >= atz: #
             v = np.cross(tangent, X_UP)
         elif atz > atx and atz >= aty:
             v = np.cross(tangent, Y_UP)
@@ -127,8 +128,8 @@ def computeFrenetSerretFrames(points, tangents, closed=True, initialNormal=None)
         if np.dot(tangents[0], np.cross(firstNormal, lastNormal)) > 0:
             theta = -1*theta
         print(theta)
-        for num, frame in enumerate(frames[1:]):
-            RotationQuaternion = Quaternion(axis=frame.tangent, angle=num*theta)
+        for num, frame in enumerate(frames[1:]):  #zero -indexed? start num with 1?
+            RotationQuaternion = Quaternion(axis=frame.tangent, angle=(num+1)*theta)
             frame.normal = RotationQuaternion.rotate(frame.normal)
             frame.binormal = np.cross(frame.tangent, frame.normal)
 

@@ -11,7 +11,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from functools import partial  # create new funtions from old functions (and strip the kwargs)
 from scipy.integrate import odeint
-import cmath 
+import cmath
 import sympy as sym
 import frenet_serret
 
@@ -43,17 +43,20 @@ def Kedia_32(xx):
     return vv/np.sum(np.sqrt(vv**2))
 
 def fieldline(start=np.array([np.random.random_sample(),0,0]), field=Kedia_32, N=100, tf=100):
+    """
+    Integrate a fieldline using scipy.odeint
+    """
     numargs = len(inspect.signature(field).parameters)
     if numargs == 1:
         # replace with function with proper call signature
-        print('adding time dependence to the function')
+        #print('adding time dependence to the function')
         placeholder = field
         field = lambda xx, t: placeholder(xx)
     elif numargs > 2:
         print("Error: function call signature takes too many arguments")
         raise TypeError
-    print(start)
-    print(field(start, 0))
+    #print(start)
+    #print(field(start, 0))
     t = np.linspace(0, tf, N)
     X = odeint(field, start, t, hmax=0.05, rtol=1e-10)
     return X
@@ -77,20 +80,20 @@ def calculateTangents(points, function):
     *function*: the function that was integrated to generate the points
     """
     #Evaluate the function at point, and use fancy-schmancy
-    #python array-casting to make a list of this for every point. 
+    #python array-casting to make a list of this for every point.
     tangents = [function(point) for point in points]
     return tangents
 
 
 def dToPlane(dispoint, point, normal):
-     """
-     calculates the distance from a point to a plane
-     """
+    """
+    calculates the distance from a point to a plane
+    """
     return np.dot((dispoint-point),normal)
 
-def getPositiveCrossings(points, point, normal):
+def getAllCrossings(points, point, normal):
     """
-    returns the indexes in the streamline array where the crossings occur
+    returns the indexes in the points array where the crossings occur
     The crossing occurs between this index and next index.
     """
     sides = np.dot( (points-point), normal)<0 #calculate the side of the plane each point falls on by projecting on the normal vector
@@ -105,37 +108,37 @@ def pointOnPlane(p1, p2, point, normal):
         return
     linevec = p1-p2 #vector along the line
     distance =(np.dot( (point - p1),normal))/(np.dot(linevec, normal)) #see wikipedia, Line-plane_intersection
-    
+
     return distance*linevec + p1
 
 
-def getAnglefromSegmentCrossingFrame(segment, frame): #function that takes a line segment and corresponding frame 
+def getAnglefromSegmentCrossingFrame(segment, frame): #function that takes a line segment and corresponding frame
     """
     takes a line segment from a larger field line array and a corresponding frame and calculates the crossing index and angle within the frame
     """
-    
-    crossingIndices = getPositiveCrossings(segment, frame.position, frame.tangent) #finds the crossing of the frame and the segment
-    
+
+    crossingIndices = getAllCrossings(segment, frame.position, frame.tangent) #finds the crossing of the frame and the segment
+
     if len(crossingIndices)==0:
         print('Warning! No crossing between segment and frame found! Try changing segment length.')
-        
+
     if len(crossingIndices)>1:
         print('Warning! More than one crossing found! Try changing segment length.')
-    
+
     crossCoord = pointOnPlane(segment[crossingIndices[0]], segment[crossingIndices[0]+1], frame.position, frame.tangent) #computes the crossing coordinate on the segment
-    
+
     normalProjection = np.dot(crossCoord - frame.position, frame.normal) #finds the projection of the crossCoord onto the normal vector of the frame
     binormalProjection = np.dot(crossCoord - frame.position, frame.binormal) #finds the projection of the crossCoord onto the binormal vector of the frame
-        
+
     crossingIndex = crossingIndices[0]
-    
+
     angle = np.arctan2(normalProjection, binormalProjection)
-    
+
     return angle, crossingIndex
 
 
 tangents = calculateTangents(fieldline2ListOfPoints(magneticAxis), Kedia_32)
-frames = frenet_serret.computeFrenetSerretFrames(magneticAxis[:31], tangents[:31]) 
+frames = frenet_serret.computeFrenetSerretFrames(magneticAxis[:31], tangents[:31])
 stepSize = 0.1
 points = fieldline(start=np.array(frames[0].position + frames[0].normal * stepSize), field=Kedia_32, N=1000, tf=100)
 
@@ -147,35 +150,36 @@ def rotationalTransform(points, frames):
     angles = []
     currentPosition = 1 #first point after 0th frame
     currentFrameNumber = 1
-    searchForward = 35 
+    searchForward = 35
     searchBack = 15
-    #searchForward and searchBack define the segment as a crossing index plus searchForward and minus searchBack 
+    #searchForward and searchBack define the segment as a crossing index plus searchForward and minus searchBack
     numFrames = len(frames)
-    
+
     while currentPosition < len(points) - (searchForward+1):
 
         segment = points[max(currentPosition-searchBack, 0) : currentPosition+searchForward] #creates an array of 16 points on the Field Line which will be used to find the crossings of the Field Line and the Frenet-Serret Frames
 
         currentFrame = frames[currentFrameNumber]
-        
+
         angle, crossingIndex = getAnglefromSegmentCrossingFrame(segment, currentFrame) #grabes the crossingIndex of the segment and frame and finds the angle of the crossing in frame
-        
+
         currentFrameNumber = (currentFrameNumber + 1) % (numFrames) #updates the frame to the next frame alone the magnetic axis
-        currentPosition = currentPosition + crossingIndex +1 #updates the position to the position after the crossing index to define next search segment
-        
+        currentPosition = currentPosition + crossingIndex +1 #updates the position to the position after the crossing index to define next search segment (NO NEED FOR SEARCHBACK?)
+
         angles.append(angle) #adds angle from getAnglefromSegmentCrossingFrame to empty list defined above
-        
+
     angles = np.array(angles) #makes angles into an array rather than a list
-    angleDiff = (angles[1:]-angles[:-1])%(2*np.pi) #the difference between an angle and the angle before modulo 2pi as to not overcount 
-    
-    angleDiff = angleDiff - 2*np.pi
-    
-    numCompleteTurns = int((len(angles)/(numFrames))) #int throws away everything after the decimal 
-    
-    TotalAngle = sum(angleDiff[:numCompleteTurns*numFrames - 2]) #subtract 2 because angleDiff has one less element than angles and python is 0-indexed
-    
+    angleDiff = (angles[1:]-angles[:-1])%(2*np.pi) #the difference between an angle and the angle before modulo 2pi as to not overcount
+
+    angleDiff = angleDiff - 2*np.pi #ad hoc?
+
+    numCompleteTurns = int((len(angles)/(numFrames))) #int throws away everything after the decimal
+
+    TotalAngle = sum(angleDiff[:numCompleteTurns*numFrames - 2]) #subtract 2 because angleDiff has one less element than angles and python is 0-indexed. Doublecheck!
+
     RotationalTransform = (TotalAngle / (numCompleteTurns * (2*np.pi)))
-    
+    print("The field line has made {} complete turns".format(numCompleteTurns))
+
     return RotationalTransform
 
 ##Comparing the rotational transform and stepSize:
@@ -183,8 +187,8 @@ rotationalTransforms = []
 tangents = calculateTangents(fieldline2ListOfPoints(magneticAxis), Kedia_32)
 frames = frenet_serret.computeFrenetSerretFrames(magneticAxis[:31], tangents[:31])
 
-for stepSize in np.linspace(0.01, 0.2, 20): 
-    points = fieldline(start=np.array(frames[0].position + frames[0].normal * stepSize), field=Kedia_32, N=1000, tf=100)
+for stepSize in np.linspace(0.01, 0.2, 20):
+    points = fieldline(start=np.array(frames[0].position + frames[0].normal * stepSize), field=Kedia_32, N=10000, tf=1000)
 
     rotationalTransforms.append(rotationalTransform(points, frames))
 
